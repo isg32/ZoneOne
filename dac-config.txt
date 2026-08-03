@@ -1,0 +1,11 @@
+The CJMCU-1334 UDA1334A I2S DAC Audio Stereo Decoder Module is a high-quality digital-to-analog converter (DAC) designed to decode I2S audio signals into stereo analog audio output. It uses the UDA1334A IC to deliver high-fidelity audio conversion for audio systems, sound projects, and embedded applications. Ideal for audio players, sound systems, and embedded projects that require stereo audio decoding from digital I2S audio sources.
+Features:
+
+    IC Used: UDA1334A I2S audio DAC.
+    Audio Output: Provides stereo analog output (L/R channels).
+    Input Interface: Supports I2S digital audio input.
+    Audio Quality: High-quality audio decoding for clear sound reproduction.
+    Power Supply: Works with 5V supply voltage.
+    Compact Module: Small, easy-to-integrate form factor for embedded projects.
+    Applications: Ideal for audio players, sound systems, and embedded devices requiring I2S to stereo DAC conversion.
+

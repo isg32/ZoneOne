@@ -1,0 +1,40 @@
+This is 2.4 inch TFT display 240×320 ST7789V SPI 10 Pin. The 2.4 Inch TFT LCD display screen is a compact and versatile screen with a 2.4-inch diagonal size. It offers clear and vibrant visual output, making it suitable for various applications, including small electronic devices, DIY projects, and industrial displays. With its compact form factor and high-quality display, this screen provides an excellent balance of size and functionality, making it a valuable component for enhancing user interfaces and information displays.
+
+Features:
+
+    2.4-inch LCD display screen.
+    Compact and versatile design.
+    Provides clear and vibrant visuals.
+    Suitable for small electronic devices.
+    Ideal for DIY projects and industrial displays.
+    Enhances user interfaces and information displays.
+
+Specifications:
+
+    Display Type: 2.4 inch TFT-LCD
+    Viewing Direction:12:00
+    Main LCD Drive IC:ST7789V Or Compatible
+    Touch : NO
+    Drive Method:1/240 Duty
+    Vdda:2.8V Typical;vddio:2.8V Typical
+    Backlight: White Led-4chip(15mA/LED),Vf=3.0V
+    Operating Temp:-20°C~ 70°C
+    Storage Temp:-30°C~ 80°C
+    General Tolerance: ±0.2
+    Interface:4-SPI
+
+Pin configuration:
+
+Pin No. Symbol
+1            GND
+2            RS
+3            CS
+4            SCL
+5            SDA
+6            RESET
+7            VDD
+8            GND
+9            LED+
+10          LED-
+
+

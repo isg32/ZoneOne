@@ -1,0 +1,57 @@
+The ESP32 S3 Devkit is a high-performance development board based on the ESP32 S3 SoC, designed for AI, IoT, and embedded applications. Featuring the ESP32 S3 WROOM 1 N16R8 module, it comes equipped with 16MB Flash and 8MB PSRAM, offering ample memory for complex applications like computer vision, speech recognition, and machine learning at the edge. Has an onboard microSD card slot for local data storage upto 64GB.
+
+Built with dual-core Xtensa® LX7 processors running up to 240 MHz, the ESP32 S3 Dev Kit provides advanced performance while maintaining low power consumption. It supports Wi-Fi 802.11 b/g/n and Bluetooth 5 LE, enabling seamless wireless connectivity for smart devices, wearables, automation systems, and more.
+
+This board includes a USB Type-C port for power and programming, onboard reset and boot buttons, and a full set of GPIO headers for flexible prototyping. It is compatible with ESP-IDF, Arduino IDE, MicroPython, and PlatformIO, making it ideal for developers and hobbyists alike.
+
+Key Features:
+
+    Chipset: ESP32 S3 Dual-Core Xtensa® LX7 (up to 240 MHz)
+
+    Module: ESP32 S3 WROOM 1 N16R8 (16MB Flash, 8MB PSRAM)
+
+    Connectivity: Wi-Fi 802.11 b/g/n, Bluetooth 5.0 (LE)
+
+    AI Acceleration: Supports vector instructions for AI/ML and DSP tasks
+
+    Interfaces: GPIO, SPI, I2C, UART, ADC, PWM, USB OTG
+
+    USB Type-C interface for power, programming, and debugging
+
+    Operating Voltage: 3.0V – 3.6V (typical 3.3V)
+
+    Power Modes: Deep sleep and low power support
+
+    Software Support: ESP-IDF, Arduino, MicroPython, PlatformIO
+
+    Ideal For: Edge AI applications, IoT devices, robotics, automation, and prototyping
+
+Highlights
+
+    Dual-core AI-ready ESP32 S3 for faster inferencing and data processing
+
+    16MB Flash + 8MB PSRAM for complex, memory-heavy applications
+
+    Wi-Fi + Bluetooth 5.0 LE dual connectivity for IoT integration
+
+    AI acceleration with vector instructions for ML and DSP workloads
+
+    USB Type-C port for easy power and programming
+
+    Fully supported by ESP-IDF, Arduino, MicroPython, and PlatformIO
+
+    Ideal for AIoT products, robotics, smart sensors, drones, and automation projects
+
+Compatible Use Cases
+
+    AI-enabled IoT and sensor devices
+    onboard microSD card for voice AI, data logging and video capture applications
+
+    Voice and image recognition systems
+
+    Smart home and consumer IoT projects
+
+    Robotics and drone control units
+
+    Industrial and automation controllers
+
