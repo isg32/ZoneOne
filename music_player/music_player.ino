@@ -21,8 +21,9 @@
  *  Volume is shown as a popup overlay on UP/DOWN in Now Playing.
  *
  *  Required libraries (Library Manager):
- *    • ESP32-audioI2S  by schreibfaul1
- *    • ArduinoJson     by bblanchon
+ *    • ESP32-audioI2S  by schreibfaul1  (decodes MP3/WAV/FLAC/AAC,
+ *      including directly off the SD card via connecttoFS)
+ *  SD/FS/SPI ship with the ESP32 Arduino core, no install needed.
  *
  *  Board settings:
  *    Board   : ESP32S3 Dev Module
@@ -36,14 +37,6 @@
  *           Onboard IC charges via USB-C automatically.
  * ============================================================
  */
-
-// ============================================================
-//  USER CONFIG  ← edit these three lines
-// ============================================================
-#define WIFI_SSID    "CIA_HONEYPOT_2"
-#define WIFI_PASS    "8153022369"
-#define SERVER_IP    "192.168.31.77"
-#define SERVER_PORT  8080
 
 // ============================================================
 //  PINS
@@ -74,11 +67,9 @@
 // ============================================================
 #include <Arduino.h>
 #include <SPI.h>
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+#include <FS.h>
+#include <SD.h>
 #include <Audio.h>
-#include <TJpg_Decoder.h>
 // ============================================================
 //  DISPLAY
 // ============================================================
@@ -274,7 +265,6 @@ static uint32_t g_pause_began  = 0;  // when current pause started
 static int      g_volume       = 80;  // 0–100 in firmware; maps to 0–21 for lib
 static int      g_song_count   = 0;
 static Song     g_songs[100];
-static bool     g_wifi_ok      = false;
 static bool     g_fetched      = false;
 static char     g_clock[6]     = "12:00";
 
@@ -295,15 +285,6 @@ static void dsel()  { digitalWrite(PIN_DISP_CS, LOW);  }
 static void ddes()  { digitalWrite(PIN_DISP_CS, HIGH); }
 static void dcmd()  { digitalWrite(PIN_DISP_DC, LOW);  }
 static void ddata() { digitalWrite(PIN_DISP_DC, HIGH); }
-bool tjpg_callback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
-    // Ensure offsets are added correctly for the art box
-    disp_set_win(x + ART_X, y + ART_Y, x + w + ART_X - 1, y + h + ART_Y - 1);
-    dsel(); ddata();
-    // TJpgDec provides the bitmap in the correct order when setSwapBytes(true) is used
-    g_spi->writeBytes((uint8_t*)bitmap, w * h * 2);
-    ddes();
-    return true;
-}
 
 // ============================================================
 //  FUNCTION PROTOTYPES (Add these here to fix the error)
@@ -542,7 +523,7 @@ static void hide_volume_popup_if_needed()
     if (g_vol_visible && millis() >= g_vol_hide_ms) {
         g_vol_visible = false;
         if (g_screen == SCR_NOWPLAYING) {
-            draw_nowplaying_content(false); // Pass false (we don't want to re-download art just to hide volume)
+            draw_nowplaying_content(false); // partial redraw, skip the art placeholder repaint
         }
     }
 }
@@ -590,9 +571,8 @@ static void draw_song_list()
     if (g_song_count == 0) {
         disp_fill(0, CONTENT_Y, DISP_W, CONTENT_H, C_LTGRAY);
         disp_str(16, CONTENT_Y + 30, "NO SONGS FOUND", C_RED, C_LTGRAY, 1);
-        disp_str(8,  CONTENT_Y + 54, "1. Run server.py on PC", C_BLACK, C_LTGRAY);
-        disp_str(8,  CONTENT_Y + 68, "2. Check SERVER_IP",     C_BLACK, C_LTGRAY);
-        disp_str(8,  CONTENT_Y + 82, "3. Check WiFi / firewall",C_BLACK, C_LTGRAY);
+        disp_str(8,  CONTENT_Y + 54, "1. Check SD card is inserted", C_BLACK, C_LTGRAY);
+        disp_str(8,  CONTENT_Y + 68, "2. Add .mp3/.wav/.flac files", C_BLACK, C_LTGRAY);
         disp_str(8,  CONTENT_Y + 96, "PREV = back to menu",    C_DKGRAY, C_LTGRAY);
         draw_statusbar(0, 0);
         draw_transport();
@@ -650,14 +630,10 @@ static void draw_song_list()
 // ============================================================
 static void draw_nowplaying_content(bool full)
 {
-    // If it's a full redraw, download and draw the album art first
+    // No art source without WiFi/HTTP — always draw the placeholder box.
     if (full) {
-        if (g_now_idx >= 0) {
-            download_and_draw_art(g_now_idx);
-        } else {
-            disp_fill(ART_X, ART_Y, ART_W, ART_H, C_BLACK);
-            disp_rect(ART_X, ART_Y, ART_W, ART_H, C_WINBDR);
-        }
+        disp_fill(ART_X, ART_Y, ART_W, ART_H, C_BLACK);
+        disp_rect(ART_X, ART_Y, ART_W, ART_H, C_WINBDR);
     }
 
     // Bitrate badge (drawn over the art)
@@ -779,47 +755,48 @@ static void go_back()
 }
 
 // ============================================================
-//  NETWORK
+//  SD LIBRARY  — flat folder of audio files, no ID3/FLAC tag
+//  parsing yet: title is just the filename, artist/album are blank
+//  and duration/bitrate are unknown until a track is played.
 // ============================================================
 static void fetch_song_list()
 {
-    if (!g_wifi_ok) return;
-    char url[128];
-    snprintf(url, sizeof(url), "http://%s:%d/list", SERVER_IP, SERVER_PORT);
-    Serial.printf("[NET] %s\n", url);
-
     // Loading indicator
     disp_fill(0, CONTENT_Y, DISP_W, CONTENT_H, C_LTGRAY);
     disp_str(50, CONTENT_Y + 70, "Loading...", C_NAVY, C_LTGRAY, 1);
 
-    HTTPClient http;
-    http.begin(url);
-    http.setTimeout(6000);
-    int code = http.GET();
-    if (code != 200) {
-        Serial.printf("[NET] HTTP %d\n", code);
-        http.end();
+    g_song_count = 0;
+
+    File root = SD.open("/");
+    if (!root || !root.isDirectory()) {
+        Serial.println("[SD] Failed to open root directory");
         return;
     }
-    String body = http.getString();
-    http.end();
 
-    DynamicJsonDocument doc(16384);
-    if (deserializeJson(doc, body)) return;
-
-    g_song_count = 0;
-    JsonArray arr = doc["songs"];
-    for (JsonObject s : arr) {
-        if (g_song_count >= 100) break;
-        strncpy(g_songs[g_song_count].title,  s["title"]  | "Unknown",        63);
-        strncpy(g_songs[g_song_count].artist, s["artist"] | "Unknown Artist",  47);
-        strncpy(g_songs[g_song_count].album,  s["album"]  | "Unknown Album",   47);
-        g_songs[g_song_count].duration_s   = s["duration_s"]   | 0;
-        g_songs[g_song_count].bitrate_kbps = s["bitrate_kbps"] | 0;
-        g_song_count++;
+    File entry = root.openNextFile();
+    while (entry && g_song_count < 100) {
+        if (!entry.isDirectory()) {
+            String name = entry.name();
+            if (name.startsWith("/")) name.remove(0, 1);
+            String lower = name;
+            lower.toLowerCase();
+            if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".flac")) {
+                Song &s = g_songs[g_song_count];
+                strncpy(s.title, name.c_str(), sizeof(s.title) - 1);
+                s.title[sizeof(s.title) - 1] = '\0';
+                s.artist[0]      = '\0';
+                s.album[0]       = '\0';
+                s.duration_s     = 0;
+                s.bitrate_kbps   = 0;
+                g_song_count++;
+            }
+        }
+        entry = root.openNextFile();
     }
+    root.close();
+
     g_fetched = true;
-    Serial.printf("[NET] %d songs loaded\n", g_song_count);
+    Serial.printf("[SD] %d songs found\n", g_song_count);
 }
 
 // ============================================================
@@ -835,12 +812,12 @@ static void set_volume(int v)
 static void play_song(int idx)
 {
     if (idx < 0 || idx >= g_song_count) return;
-    char url[128];
-    snprintf(url, sizeof(url), "http://%s:%d/play/%d", SERVER_IP, SERVER_PORT, idx);
-    Serial.printf("[AUDIO] #%d %s\n", idx, g_songs[idx].title);
+    char path[80];
+    snprintf(path, sizeof(path), "/%s", g_songs[idx].title);
+    Serial.printf("[AUDIO] #%d %s\n", idx, path);
 
     g_audio.stopSong();
-    g_audio.connecttohost(url);
+    g_audio.connecttoFS(SD, path);
 
     g_now_idx      = idx;
     g_playing      = true;
@@ -1047,72 +1024,6 @@ static void handle_input(int ev)
     }
 }
 
-static void download_and_draw_art(int idx) {
-    if (!g_wifi_ok) return;
-    char url[128];
-    snprintf(url, sizeof(url), "http://%s:%d/art/%d", SERVER_IP, SERVER_PORT, idx);
-    
-    Serial.printf("[NET] Fetching Art: %s\n", url);
-    
-    HTTPClient http;
-    http.begin(url);
-    http.setTimeout(4000); // Don't wait too long
-    int code = http.GET();
-    
-    if (code == 200) {
-        int len = http.getSize();
-        if (len <= 0) return;
-
-        // Allocate in PSRAM (MALLOC_CAP_SPIRAM) to keep internal RAM free
-        uint8_t *jpg_buf = (uint8_t *)heap_caps_malloc(len, MALLOC_CAP_SPIRAM);
-        
-        if (jpg_buf) {
-            WiFiClient *stream = http.getStreamPtr();
-            int read_idx = 0;
-            
-            // Download bytes while keeping the audio engine alive
-            while (read_idx < len) {
-                if (stream->available()) {
-                    jpg_buf[read_idx++] = stream->read();
-                }
-                g_audio.loop(); // CRITICAL: Prevents music from stopping during download
-            }
-            
-            // FIXED: Use drawJpg instead of drawArray
-            // (0, 0) is relative to the tjpg_callback offsets
-            TJpgDec.drawJpg(0, 0, jpg_buf, len);
-            
-            free(jpg_buf);
-            Serial.println("[UI] Artwork drawn.");
-        }
-    } else {
-        Serial.printf("[NET] Art failed, code: %d\n", code);
-        // Draw a placeholder dark gray square if download fails
-        disp_fill(ART_X, ART_Y, ART_W, ART_H, 0x2104);
-        disp_rect(ART_X, ART_Y, ART_W, ART_H, C_WINBDR);
-    }
-    http.end();
-}
-
-// ============================================================
-//  WIFI
-// ============================================================
-static void connect_wifi()
-{
-    Serial.printf("[WIFI] Connecting to %s", WIFI_SSID);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    for (int i = 0; i < 24 && WiFi.status() != WL_CONNECTED; i++) {
-        delay(500); Serial.print(".");
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-        g_wifi_ok = true;
-        Serial.printf("\n[WIFI] %s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Serial.println("\n[WIFI] FAILED");
-    }
-}
-
 // ============================================================
 //  SPLASH
 // ============================================================
@@ -1125,8 +1036,7 @@ static void show_splash()
     disp_fill(6, 30, DISP_W-12, DISP_H-60, C_LTGRAY);
     disp_str(40,  90, "ESP32-S3", C_BLACK, C_LTGRAY, 2);
     disp_str(58, 112, "iPOD",     C_NAVY,  C_LTGRAY, 2);
-    disp_str(24, 155, "Connecting to WiFi...", C_BLACK, C_LTGRAY);
-    disp_str(20, 170, WIFI_SSID,              C_NAVY,  C_LTGRAY);
+    disp_str(24, 155, "Mounting SD card...", C_BLACK, C_LTGRAY);
 }
 
 // ============================================================
@@ -1136,26 +1046,24 @@ void setup()
 {
     Serial.begin(115200);
     delay(1500);
-    Serial.println("\n=== ESP32-S3 iPod v3 ===");
+    Serial.println("\n=== ESP32-S3 iPod ===");
 
     init_buttons();
     init_display();
-    TJpgDec.setSwapBytes(true);
     show_splash();
-    connect_wifi();
-    TJpgDec.setCallback(tjpg_callback);
 
-    if (g_wifi_ok) {
-        disp_str(24, 192, "Connected!", C_GREEN, C_LTGRAY);
+    if (SD.begin()) {
+        disp_str(24, 192, "SD card mounted", C_GREEN, C_LTGRAY);
         delay(400);
-        disp_str(24, 208, "Fetching songs...", C_BLACK, C_LTGRAY);
+        disp_str(24, 208, "Scanning songs...", C_BLACK, C_LTGRAY);
         fetch_song_list();
         char buf[32];
         snprintf(buf, sizeof(buf), "%d songs found", g_song_count);
         disp_str(24, 224, buf, C_NAVY, C_LTGRAY);
         delay(600);
     } else {
-        disp_str(24, 192, "WiFi FAILED!", C_RED, C_LTGRAY);
+        Serial.println("[SD] Card Mount Failed");
+        disp_str(24, 192, "SD MOUNT FAILED!", C_RED, C_LTGRAY);
         delay(2000);
     }
 
@@ -1174,7 +1082,7 @@ static uint32_t g_last_clock_ms = 0;
 
 void loop()
 {
-    // The audio loop drives the Wi-Fi buffer and I2S
+    // The audio loop pulls data from the SD file and feeds I2S
     g_audio.loop();
 
     int ev = poll_buttons();
