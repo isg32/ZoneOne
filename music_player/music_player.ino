@@ -1047,6 +1047,8 @@ void setup()
     Serial.begin(115200);
     delay(1500);
     Serial.println("\n=== ESP32-S3 iPod ===");
+    Serial.printf("[PSRAM] found=%d size=%u free=%u\n",
+                   psramFound(), ESP.getPsramSize(), ESP.getFreePsram());
 
     init_buttons();
     init_display();
