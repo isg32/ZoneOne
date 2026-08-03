@@ -1091,6 +1091,11 @@ void setup()
     }
 
     g_audio.setPinout(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
+    // This CJMCU-1334/UDA1334A breakout expects LSB-justified I2S timing,
+    // not the library's default Philips-standard format — without this,
+    // every sample is read one bit-clock out of alignment, which sounds
+    // like garbled/distorted audio rather than silence or clean playback.
+    g_audio.setI2SCommFMT_LSB(true);
     g_audio.setVolume(g_volume * 21 / 100);
 
     g_screen = SCR_MENU;
