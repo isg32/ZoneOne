@@ -242,7 +242,8 @@ static const uint8_t FONT[128][5] = {
 enum Screen { SCR_MENU, SCR_SONGS, SCR_NOWPLAYING };
 
 struct Song {
-    char title[64];
+    char title[64];   // filename only, for display
+    char path[160];   // full path from SD root, for playback
     char artist[48];
     char album[48];
     int  duration_s;
@@ -755,10 +756,50 @@ static void go_back()
 }
 
 // ============================================================
-//  SD LIBRARY  — flat folder of audio files, no ID3/FLAC tag
-//  parsing yet: title is just the filename, artist/album are blank
-//  and duration/bitrate are unknown until a track is played.
+//  SD LIBRARY  — recursively scans every folder on the card (root,
+//  /music, and anything nested under it), no ID3/FLAC tag parsing
+//  yet: title is just the filename, artist/album are blank and
+//  duration/bitrate are unknown until a track is played.
 // ============================================================
+#define SCAN_MAX_DEPTH 8
+
+static void scan_dir(File dir, int depth)
+{
+    if (depth > SCAN_MAX_DEPTH) return;
+
+    File entry = dir.openNextFile();
+    while (entry && g_song_count < 100) {
+        String full = entry.path();
+        if (entry.isDirectory()) {
+            File sub = SD.open(full);
+            if (sub) {
+                scan_dir(sub, depth + 1);
+                sub.close();
+            }
+        } else {
+            String lower = full;
+            lower.toLowerCase();
+            if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".flac")) {
+                int slash = full.lastIndexOf('/');
+                String name = (slash >= 0) ? full.substring(slash + 1) : full;
+
+                Song &s = g_songs[g_song_count];
+                strncpy(s.title, name.c_str(), sizeof(s.title) - 1);
+                s.title[sizeof(s.title) - 1] = '\0';
+                strncpy(s.path, full.c_str(), sizeof(s.path) - 1);
+                s.path[sizeof(s.path) - 1] = '\0';
+                s.artist[0]      = '\0';
+                s.album[0]       = '\0';
+                s.duration_s     = 0;
+                s.bitrate_kbps   = 0;
+                g_song_count++;
+            }
+        }
+        entry.close();
+        entry = dir.openNextFile();
+    }
+}
+
 static void fetch_song_list()
 {
     // Loading indicator
@@ -773,26 +814,7 @@ static void fetch_song_list()
         return;
     }
 
-    File entry = root.openNextFile();
-    while (entry && g_song_count < 100) {
-        if (!entry.isDirectory()) {
-            String name = entry.name();
-            if (name.startsWith("/")) name.remove(0, 1);
-            String lower = name;
-            lower.toLowerCase();
-            if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".flac")) {
-                Song &s = g_songs[g_song_count];
-                strncpy(s.title, name.c_str(), sizeof(s.title) - 1);
-                s.title[sizeof(s.title) - 1] = '\0';
-                s.artist[0]      = '\0';
-                s.album[0]       = '\0';
-                s.duration_s     = 0;
-                s.bitrate_kbps   = 0;
-                g_song_count++;
-            }
-        }
-        entry = root.openNextFile();
-    }
+    scan_dir(root, 0);
     root.close();
 
     g_fetched = true;
@@ -812,8 +834,7 @@ static void set_volume(int v)
 static void play_song(int idx)
 {
     if (idx < 0 || idx >= g_song_count) return;
-    char path[80];
-    snprintf(path, sizeof(path), "/%s", g_songs[idx].title);
+    const char *path = g_songs[idx].path;
     Serial.printf("[AUDIO] #%d %s\n", idx, path);
 
     g_audio.stopSong();

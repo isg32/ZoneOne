@@ -106,8 +106,10 @@ silkscreen labels can vary by breakout batch:
 ## Scope — what this does and doesn't do
 
 Does:
-- Mounts the SD card, scans the root folder for `.mp3`/`.wav`/`.flac`
-  files, and lists them in the Songs screen.
+- Mounts the SD card and recursively scans every folder on it (root,
+  `/music`, and anything nested underneath) for `.mp3`/`.wav`/`.flac`
+  files, listing all of them together in the Songs screen (capped at
+  100 tracks, `SCAN_MAX_DEPTH` folders deep).
 - Plays the selected file through the UDA1334A via I2S.
 - Full click-wheel-style navigation (menu, song list, now playing,
   volume popup, transport chrome) ported unchanged from the original
