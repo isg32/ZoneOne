@@ -1091,11 +1091,12 @@ void setup()
     }
 
     g_audio.setPinout(PIN_I2S_BCK, PIN_I2S_WS, PIN_I2S_DOUT);
-    // This CJMCU-1334/UDA1334A breakout expects LSB-justified I2S timing,
-    // not the library's default Philips-standard format — without this,
-    // every sample is read one bit-clock out of alignment, which sounds
-    // like garbled/distorted audio rather than silence or clean playback.
-    g_audio.setI2SCommFMT_LSB(true);
+    // Reverted: this CJMCU-1334/UDA1334A board's SF0/SF1 format-select
+    // pins are hardware-strapped low by default, which the reference
+    // design's documentation says means standard Philips I2S — the
+    // library's own default. LSB-justified gave only a marginal,
+    // inconclusive change; the hardware strap is the stronger signal,
+    // so this stays at Philips to match what the DAC is wired for.
     g_audio.setVolume(g_volume * 21 / 100);
 
     g_screen = SCR_MENU;
