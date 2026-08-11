@@ -86,6 +86,16 @@ silkscreen labels can vary by breakout batch:
 
 **Buttons** — one leg to the GPIO, other leg to GND.
 
+## Turning this into a breakout board
+
+If you're wiring this by hand from a breadboard, the tables above are
+all you need. If you want to build a carrier/breakout PCB so the
+ESP32-S3 dev board, display, DAC, and buttons all just plug in via
+headers instead of point-to-point wiring, see
+[`docs/BREAKOUT_BOARD.md`](docs/BREAKOUT_BOARD.md) — it has the full
+connector-by-connector pinout, a bill of materials, and wiring
+diagrams (`docs/diagrams/`).
+
 ## Arduino IDE board settings
 
 - Board: **ESP32S3 Dev Module**
